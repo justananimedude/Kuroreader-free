@@ -1,87 +1,92 @@
-name: Android APK
+name: Build APK
 on: [push, workflow_dispatch]
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      
-      - name: set up JDK 17
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          
+
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-        
-      - name: Create project files
+
+      - name: Create Project
         run: |
+          rm -rf app
           mkdir -p app/src/main/java/com/kuroreader/free
           echo "include ':app'" > settings.gradle
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          
-          cat > build.gradle <<'EOF'
+          cat > build.gradle <<'ENDOFFILE'
           buildscript {
-            repositories { google(); mavenCentral() }
-            dependencies {
-              classpath 'com.android.tools.build:gradle:8.1.4'
-              classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10'
-            }
+              repositories { google(); mavenCentral() }
+              dependencies {
+                  classpath 'com.android.tools.build:gradle:8.1.4'
+                  classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.10'
+              }
           }
-          task clean(type: Delete) { delete rootProject.buildDir }
-          EOF
-          
-          cat > app/build.gradle <<'EOF'
+          ENDOFFILE
+          cat > app/build.gradle <<'ENDOFFILE'
           plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
           android {
-            namespace 'com.kuroreader.free'
-            compileSdk 34
-            defaultConfig { applicationId "com.kuroreader.free"; minSdk 26; targetSdk 34; versionCode 1; versionName "1.0" }
-            buildTypes { release { minifyEnabled false } debug { minifyEnabled false } }
+              namespace 'com.kuroreader.free'
+              compileSdk 34
+              defaultConfig { applicationId "com.kuroreader.free"; minSdk 26; targetSdk 34; versionCode 1; versionName "1.0" }
+              buildTypes { debug { minifyEnabled false } }
           }
-          dependencies { implementation 'androidx.core:core-ktx:1.12.0'; implementation 'androidx.appcompat:appcompat:1.6.1' }
-          EOF
-          
-          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          dependencies {
+              implementation 'androidx.core:core-ktx:1.12.0'
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+          }
+          ENDOFFILE
+          cat > app/src/main/AndroidManifest.xml <<'ENDOFFILE'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-            <uses-permission android:name="android.permission.INTERNET"/>
-            <application android:label="KuroReader" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-              <activity android:name=".MainActivity" android:exported="true">
-                <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
-              </activity>
-            </application>
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="KuroReader" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+                  </activity>
+              </application>
           </manifest>
-          EOF
-          
-          cat > app/src/main/java/com/kuroreader/free/MainActivity.kt <<'EOF'
+          ENDOFFILE
+          cat > app/src/main/java/com/kuroreader/free/MainActivity.kt <<'ENDOFFILE'
           package com.kuroreader.free
           import android.os.Bundle
-          import androidx.activity.ComponentActivity
-          import androidx.compose.material3.Text
-          import androidx.activity.compose.setContent
-          class MainActivity : ComponentActivity() {
-            override fun onCreate(savedInstanceState: Bundle?) {
-              super.onCreate(savedInstanceState)
-              setContent { Text("KuroReader OK") }
-            }
+          import android.widget.TextView
+          import androidx.appcompat.app.AppCompatActivity
+          class MainActivity : AppCompatActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  val tv = TextView(this)
+                  tv.text = "KuroReader Works!"
+                  tv.textSize = 24f
+                  tv.setPadding(50,300,50,50)
+                  setContentView(tv)
+              }
           }
-          EOF
-          
-      - name: Make gradlew
+          ENDOFFILE
+
+      - name: Make Wrapper
         run: |
           wget -q https://services.gradle.org/distributions/gradle-8.5-bin.zip
           unzip -q gradle-8.5-bin.zip
           ./gradle-8.5/bin/gradle wrapper --gradle-version 8.5
           chmod +x gradlew
-          
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --stacktrace
-        
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        if: always()
+
+      - name: Build APK
+        run: ./gradlew assembleDebug
+
+      - name: Make Release with APK
+        uses: softprops/action-gh-release@v1
         with:
-          name: KuroReader-APK
-          path: app/build/outputs/apk/debug/*.apk
+          tag_name: v1.0-${{ github.run_number }}
+          name: KuroReader APK Build ${{ github.run_number }}
+          files: app/build/outputs/apk/debug/app-debug.apk
